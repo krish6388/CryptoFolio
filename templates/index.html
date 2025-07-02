@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Live Crypto Dashboard</title>
+  <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body class="p-3">
+  <div class="container">
+    <h2 class="mb-3 text-center">📈 Live Crypto Dashboard</h2>
+
+    <div class="row mb-3">
+      <div class="col-12 d-flex flex-column flex-sm-row gap-2">
+        <select class="form-select" id="symbolSelect">
+          <option value="B-BTC_USDT@trades-futures">BTC/USDT</option>
+          <option value="B-ETH_USDT@trades-futures">ETH/USDT</option>
+          <option value="B-DOGE_USDT@trades-futures">DOGE/USDT</option>
+        </select>
+        <button class="btn btn-success w-100" onclick="subscribe()">Subscribe</button>
+        <button class="btn btn-danger w-100" onclick="unsubscribe()">Unsubscribe</button>
+      </div>
+    </div>
+
+    <div class="table-responsive">
+      <table class="table table-bordered text-center">
+        <thead class="table-light">
+          <tr>
+            <th>Symbol</th>
+            <th>Price (₹)</th>
+            <th>Quantity</th>
+            <th>Time</th>
+          </tr>
+        </thead>
+        <tbody id="priceTableBody">
+          <!-- Live rows will appear here -->
+        </tbody>
+      </table>
+    </div>
+
+    <div class="bg-light p-3 rounded mt-3" style="height: 150px; overflow-y: auto;">
+      <strong>Logs:</strong>
+      <div id="logOutput" class="text-muted small"></div>
+    </div>
+  </div>
+
+  <script>
+    const socket = io();
+    const subscribedSymbols = {}
+
+    socket.on('connect', () => {
+      console.log('✅ Connected to backend');
+    });
+
+    function subscribe() {
+      const symbol = document.getElementById("symbolSelect").value;
+    //   subscribedSymbols.add(symbol)
+      socket.emit("subscribe", { symbol });
+    }
+
+    function unsubscribe() {
+    //   console.log("Inside unsubs");
+      
+      const symbol = document.getElementById("symbolSelect").value;
+      const cleanSymbol = symbol.split('@')[0];  // removes everything after @
+      const rowId = `row-${cleanSymbol}`;
+      const row = document.getElementById(rowId);
+
+      console.log(symbol, rowId)
+
+      if (row) row.remove();
+      socket.emit("unsubscribe", { symbol });
+      
+
+    // Remove from any tracking list if you're maintaining one
+    //   subscribedSymbols.delete(symbol);
+
+    }
+
+    socket.on('log', (data) => {
+      const logDiv = document.getElementById("logOutput");
+      const entry = document.createElement("div");
+      entry.textContent = data.message;
+      logDiv.appendChild(entry);
+      logDiv.scrollTop = logDiv.scrollHeight;
+    });
+
+
+    socket.on('remove_row', (data) => {
+    const rowId = `row-${data.symbol}`;
+    const row = document.getElementById(rowId);
+    if (row) row.remove();
+    });
+
+    socket.on('trade_update', (data) => {
+      console.log('Received trade update:', data);
+      const table = document.getElementById("priceTableBody");
+      const rowId = `row-${data.symbol}`;
+      let row = document.getElementById(rowId);
+
+      if (!row) {
+        row = document.createElement("tr");
+        row.id = rowId;
+        row.innerHTML = `
+          <td>${data.symbol}</td>
+          <td>${data.price}</td>
+          <td>${data.quantity}</td>
+          <td>${data.time}</td>
+        `;
+        table.appendChild(row);
+      } else {
+        row.innerHTML = `
+          <td>${data.symbol}</td>
+          <td>${data.price}</td>
+          <td>${data.quantity}</td>
+          <td>${data.time}</td>
+        `;
+      }
+    });
+  </script>
+</body>
+</html>
