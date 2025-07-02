@@ -8,7 +8,7 @@ import sys
 import socketio
 
 flask_sio = socketio.Client()
-flask_sio.connect("http://localhost:5000")
+flask_sio.connect("https://cryptofolio-t9x7.onrender.com")
 
 if len(sys.argv) > 1:
     channelName = sys.argv[1]
