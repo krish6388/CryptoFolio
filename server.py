@@ -12,6 +12,7 @@ import json
 from datetime import datetime
 import socketio as client_socketio
 import ssl
+import os
 
 # Required for Flask-SocketIO with eventlet
 # eventlet.monkey_patch()
@@ -57,8 +58,9 @@ def handle_subscribe(data):
         # channel = f"B-{symbol}@trades-futures"
         print(symbol)
         if symbol and symbol not in active_processes:
+            print(os.listdir('/opt/render/project/src'))
 
-            process = subprocess.Popen([sys.executable, r"CryptoFolio/new_trade.py", symbol])
+            process = subprocess.Popen([sys.executable, r"new_trade.py", symbol])
             active_processes[symbol] = process
 
             emit('log', {"message": f"Subscribed to {symbol}"})
