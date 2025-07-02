@@ -58,7 +58,7 @@ def handle_subscribe(data):
         print(symbol)
         if symbol and symbol not in active_processes:
 
-            process = subprocess.Popen([sys.executable, r"cypto_dashboard\new_trade.py", symbol])
+            process = subprocess.Popen([sys.executable, r"cypto_dashboard/new_trade.py", symbol])
             active_processes[symbol] = process
 
             emit('log', {"message": f"Subscribed to {symbol}"})
