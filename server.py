@@ -78,7 +78,7 @@ def handle_unsubscribe(data):
         if sid in user_subs and symbol in user_subs[sid]:
             user_subs[sid].discard(symbol)
         else:
-            emit('log', {"message": f"Symbol {symbol} was not subscribed by you."})
+            emit('log', {"message": f"Symbol {symbol} was not subscribed by you."}, to=sid)
             return
 
         process = active_processes.get(symbol)
@@ -89,11 +89,11 @@ def handle_unsubscribe(data):
             del active_processes[symbol]
             # socketio.emit('remove_row', {'symbol': symbol})
 
-            emit('log', {"message": f"Unsubscribed from {symbol}"})
+            emit('log', {"message": f"Unsubscribed from {symbol}"}, to=sid)
         elif process:
-            emit('log', {"message": f"Unsubscribed from {symbol}"})
+            emit('log', {"message": f"Unsubscribed from {symbol}"}, to=sid)
         else:
-            emit('log', {"message": f"No active process found for {symbol}"})
+            emit('log', {"message": f"No active process found for {symbol}"}, to=sid)
         # sio.emit('leave', { 'channelName' : 'coindcx' })
         # emit("external_table_update", {
         #     "symbol": symbol,
