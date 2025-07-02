@@ -14,162 +14,111 @@ import socketio as client_socketio
 import ssl
 import os
 
-# Required for Flask-SocketIO with eventlet
-# eventlet.monkey_patch()
+"""
+    This file is used to run the backend server in flask and acts as a middle layer between the UI and the coindx ws
+    in new_trade.py file
 
-# WebSocket client setup for CoinDCX
-ssl_context = ssl.create_default_context()
-ssl_context.check_hostname = False
-ssl_context.verify_mode = ssl.CERT_NONE
+"""
 
-client_sio = client_socketio.AsyncClient(ssl_verify=False)
 symbol_subscriptions = set()
-user_subs = {}
+user_subs = {}   # {'session_id': set(eth, btc, doge)}
 price_data = {}  # Holds latest price per symbol
-active_processes = {}
+active_processes = {}  # {'symbol_name': new_trade.py processObj}
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'your-secret-key'
-socketio = SocketIO(app, cors_allowed_origins="*")
+socketio = SocketIO(app, cors_allowed_origins="*")  # --> * enables access from anywhere
 
+# Home Page route
 @app.route('/')
 def index():
     return render_template('index.html')
 
+import requests
+from flask import jsonify
+
+@app.route("/symbols")
+def get_symbols():
+    # Call external API here
+    external_api_url = "https://api.coindcx.com/exchange/v1/derivatives/futures/data/active_instruments?margin_currency_short_name[]=USDT"
+    try:
+        response = requests.get(external_api_url)
+        response.raise_for_status()
+        symbols = response.json()  
+        return jsonify(symbols)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+# Handle the subscribe emit coming from frontend
 @socketio.on('subscribe')
 def handle_subscribe(data):
     symbol = data.get('symbol')
     sid = request.sid
     if symbol:
         symbol_subscriptions.add(symbol)
+
+        # Check if this is a new session id (browser)
         if sid not in user_subs:
             user_subs[sid] = set()
+        # Add symbol to the corressponding session id
         user_subs[sid].add(symbol)
 
-        # use eventlet.spawn instead of socketio.start_background_task for true async emit
-        # def sync_emit():
-        #     if client_sio.connected:
-        #         coro = client_sio.emit('join', {'channelName': [symbol]})
-        #         asyncio.get_event_loop().create_task(coro)
-        #     else:
-        #         print("❗ CoinDCX WebSocket not yet connected.")
-
-        # eventlet.spawn(sync_emit)
-        # channel = f"B-{symbol}@trades-futures"
         print(symbol)
+        # Run new_trade.py process for each symbol only once  --> Helps in reducing the server load 
         if symbol and symbol not in active_processes:
-            print(os.listdir('/opt/render/project/src'))
 
-            process = subprocess.Popen([sys.executable, r"new_trade.py", symbol])
+            process = subprocess.Popen([sys.executable, r"new_trade.py", symbol])  # --> Run in current venv 
             active_processes[symbol] = process
 
             emit('log', {"message": f"Subscribed to {symbol}"})
 
-
+# Handles the unsubscribe emit from frontend
 @socketio.on('unsubscribe')
 def handle_unsubscribe(data):
     symbol = data.get('symbol')
     sid = request.sid
-    print('*** Unsubscribe')
-    print(data)
-    print(symbol_subscriptions)
+    print('*** Unsubscribe Running')
+    # print(data)
+    # print(symbol_subscriptions)
     if symbol and sid in user_subs and symbol in user_subs[sid]:
-        # symbol_subscriptions.remove(symbol)
-        if sid in user_subs and symbol in user_subs[sid]:
-            user_subs[sid].discard(symbol)
-        else:
-            emit('log', {"message": f"Symbol {symbol} was not subscribed by you."}, to=sid)
-            return
+        
+        user_subs[sid].discard(symbol)
 
-        process = active_processes.get(symbol)
+        process = active_processes.get(symbol)  # --> Check if symbol has an ongoing process
 
+        # Kill Process only when no sid has subcribed to the symbol
         if process and symbol not in set.union(*user_subs.values()):
             process.terminate()  # sends SIGTERM
             process.wait()       # wait for graceful exit
             del active_processes[symbol]
-            # socketio.emit('remove_row', {'symbol': symbol})
+            
 
             emit('log', {"message": f"Unsubscribed from {symbol}"}, to=sid)
         elif process:
             emit('log', {"message": f"Unsubscribed from {symbol}"}, to=sid)
         else:
             emit('log', {"message": f"No active process found for {symbol}"}, to=sid)
-        # sio.emit('leave', { 'channelName' : 'coindcx' })
-        # emit("external_table_update", {
-        #     "symbol": symbol,
-        #     "price": price,
-        #     "quantity": quantity,
-        #     "time": timestamp.strftime("%H%M%S")
-        # })
+        
     else:
         emit('log', {"message": f"Symbol {symbol} was not subscribed by you."}, to=sid)
 
+
+# Handle the live price from new_trade.py
 @socketio.on('external_table_update')
 def handle_external_trade(data):
-    # socketio.emit('trade_update', data)
+    
     print("✅ Got external_table_update:", data)
     symbol = data.get("symbol")
+
+    # Iterate the user subscription dictionary
     for sid, symbols in user_subs.items():
-        print(symbol)
-        print(symbols)
+
         if symbol + '@trades-futures' in symbols:
             print('Emiting Data to html')
             socketio.emit('trade_update', data, to=sid)
 
-# @client_sio.on('new-trade')
-# async def on_new_trade(response):
-#     try:
-#         trade_data = json.loads(response['data'])
-#         symbol = trade_data.get("s")
-#         price = trade_data.get("p")
-#         quantity = trade_data.get("q")
-#         trade_time = datetime.fromtimestamp(trade_data.get("T") / 1000)
-
-#         price_data[symbol] = {"price": price, "qty": quantity, "time": trade_time.isoformat()}
-
-#         # Broadcast to all frontend clients
-#         socketio.emit('trade_update', {
-#             "symbol": symbol,
-#             "price": price,
-#             "quantity": quantity,
-#             "time": trade_time.isoformat()
-#         })
-#     except Exception as e:
-#         print(f"Error parsing trade: {e}")
-
-# async def ping_task():
-#     while True:
-#         await asyncio.sleep(25)
-#         await client_sio.emit('ping', {'data': 'Ping message'})
-
-# async def coin_dcx_ws():
-#     print("🚀 Attempting to connect to CoinDCX WebSocket...")
-#     try:
-#         await client_sio.connect('wss://stream.coindcx.com', transports=['websocket'])
-#         print("✅ CoinDCX WebSocket connection established!")
-#         asyncio.create_task(ping_task())
-#         await client_sio.wait()
-#     except Exception as e:
-#         print(f"❌ Connection error: {e}")
-
-#     # ping = None
-#     # try:
-#     #     await client_sio.connect('wss://stream.coindcx.com', transports=['websocket'])
-#     #     ping = asyncio.create_task(ping_task())
-#     #     await client_sio.wait()
-#     # except Exception as e:
-#     #     print(f"[{datetime.now()}] ❗ Connection error: {e}")
-#     # finally:
-#     #     if ping:
-#     #         ping.cancel()
-#     #         with contextlib.suppress(asyncio.CancelledError):
-#     #             await ping
-
-# def start_coin_dcx_ws():
-#     loop = asyncio.new_event_loop()
-#     asyncio.set_event_loop(loop)
-#     loop.run_until_complete(coin_dcx_ws())
 
 if __name__ == '__main__':
-    # socketio.start_background_task(start_coin_dcx_ws)
+    print('Flask WebApp Server: Starting ...') 
     socketio.run(app, host='0.0.0.0', port=5000, debug=False)

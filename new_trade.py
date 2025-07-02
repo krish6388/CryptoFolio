@@ -7,14 +7,22 @@ import contextlib
 import sys
 import socketio
 
-flask_sio = socketio.Client()
-flask_sio.connect("https://cryptofolio-t9x7.onrender.com")
+"""
+    This file acts as a primary connector to coindx ws, join channels and get latest price updates.
+    It catches data from coindcx ws and share it with flask backend i.e. server.py
 
+"""
+
+# Connected Flask Backend Server to recieve latest price from coindx ws
+flask_sio = socketio.Client()
+flask_sio.connect("https://cryptofolio-t9x7.onrender.com/") # Flask WebApp URL
+
+
+# Changed the static channelName -> Args dependent
 if len(sys.argv) > 1:
     channelName = sys.argv[1]
 else:
     raw_symbol = "BTC_USDT"
-
     channelName = f"B-{raw_symbol}@trades-futures"
 
 # ========== WebSocket Configuration ==========
@@ -80,6 +88,8 @@ async def on_new_trade(response):
 
 
         print(f"[{timestamp}] {symbol} | Price: ₹{price} | Qty: {quantity}")
+
+        # Emit the live price of symbol to flask backend
         flask_sio.emit("external_table_update", {
             "symbol": symbol,
             "price": price,

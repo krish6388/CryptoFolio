@@ -11,6 +11,7 @@
   <div class="container">
     <h2 class="mb-3 text-center">📈 Live Crypto Dashboard</h2>
 
+    <!-- Kept a static set of Symbols incase API response doesn't load -->
     <div class="row mb-3">
       <div class="col-12 d-flex flex-column flex-sm-row gap-2">
         <select class="form-select" id="symbolSelect">
@@ -72,12 +73,29 @@
       if (row) row.remove();
       socket.emit("unsubscribe", { symbol });
       
-
-    // Remove from any tracking list if you're maintaining one
     //   subscribedSymbols.delete(symbol);
 
     }
 
+    document.addEventListener("DOMContentLoaded", () => {
+      fetch("/symbols")
+        .then(res => res.json())
+        .then(data => {
+          const dropdown = document.getElementById("symbolSelect");
+          dropdown.innerHTML = "";  // Clear old static options
+
+          data.forEach(symbol => {
+            const option = document.createElement("option");
+            option.value = `${symbol}@trades-futures`;
+            option.textContent = symbol.replace("_", "/");
+            dropdown.appendChild(option);
+          });
+        })
+        .catch(err => console.error("Failed to load symbols:", err));
+    });
+
+
+    // Handle the logs emiting from flask backend
     socket.on('log', (data) => {
       const logDiv = document.getElementById("logOutput");
       const entry = document.createElement("div");
@@ -93,6 +111,7 @@
     if (row) row.remove();
     });
 
+    // Handle the table updates from flask backend
     socket.on('trade_update', (data) => {
       console.log('Received trade update:', data);
       const table = document.getElementById("priceTableBody");
